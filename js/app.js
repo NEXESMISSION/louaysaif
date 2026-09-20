@@ -126,9 +126,16 @@
     });
     btn.disabled = false;
     if (error) {
-      if (/already registered|already been registered/i.test(error.message))
+      const m = error.message || '';
+      if (/already registered|already been registered|User already/i.test(m))
         return authMsg('That email already has an account — log in instead.');
-      return authMsg(error.message);
+      if (/Database error saving new user/i.test(m))
+        return authMsg('The invite code did not match. Check it and try again.');
+      if (/password/i.test(m) && /least|short/i.test(m))
+        return authMsg('Password needs at least 6 characters.');
+      if (/invalid.*email|email.*invalid/i.test(m))
+        return authMsg('That email address does not look right.');
+      return authMsg(m);
     }
     authMsg('');
     await enterApp();
@@ -535,6 +542,15 @@
     $('#boot').hidden = true;
     $('#app').hidden = true;
     $('#auth').hidden = false;
+
+    // A share link like ...?code=ABCDE-FGHIJ opens straight on Join with the
+    // code already filled, so nobody has to retype it on a phone keyboard.
+    const code = new URLSearchParams(location.search).get('code');
+    if (code) {
+      $('[data-auth-tab="join"]').click();
+      $('#join-code').value = code.trim();
+      $('#form-join').display_name.focus();
+    }
   }
 
   document.addEventListener('visibilitychange', () => {
