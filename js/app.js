@@ -195,12 +195,18 @@
       const leads = rows.length > 1 && net === best && net > 0;
       const card = el('div', `racer ${cls}${p.id === state.user.id ? ' is-you' : ''}${won ? ' won' : ''}`);
       const count = state.txs.filter((t) => t.user_id === p.id).length;
+      const today = state.txs.reduce((s, t) =>
+        (t.user_id === p.id && daysBetween(t.occurred_at, new Date()) === 0 ? s + Number(t.amount) : s), 0);
       card.innerHTML = `
         <div class="racer-top">
           <span class="racer-emoji">${esc(p.avatar_emoji)}</span>
           <div>
             <div class="racer-name">${esc(p.display_name)}${won ? '<span class="crown">👑</span>' : leads ? '<span class="crown">🔥</span>' : ''}</div>
-            <div class="racer-sub">${count} ${count === 1 ? 'entry' : 'entries'}${p.id === state.user.id ? '<span class="you-tag">YOU</span>' : ''}</div>
+            <div class="racer-sub">
+              ${count} ${count === 1 ? 'entry' : 'entries'}
+              ${today !== 0 ? `<span class="today-tag ${today > 0 ? 'net-pos' : 'net-neg'}">${signed(today)} today</span>` : ''}
+              ${p.id === state.user.id ? '<span class="you-tag">YOU</span>' : ''}
+            </div>
           </div>
           <div class="racer-net">
             <b class="${net >= 0 ? 'net-pos' : 'net-neg'}">${signed(net)}</b>
@@ -274,11 +280,25 @@
       box.append(el('p', 'empty-note', 'Nothing here yet. Tap ＋ to log your first move.'));
       return;
     }
+    // net per day, so each header can carry its own subtotal
+    const dayNets = new Map();
+    if (grouped) {
+      for (const t of rows) {
+        const k = startOfDay(t.occurred_at).getTime();
+        dayNets.set(k, (dayNets.get(k) || 0) + Number(t.amount));
+      }
+    }
+
     let lastDay = null;
     for (const t of rows) {
       if (grouped) {
         const key = startOfDay(t.occurred_at).getTime();
-        if (key !== lastDay) { lastDay = key; box.append(el('div', 'day-head', dayLabel(t.occurred_at))); }
+        if (key !== lastDay) {
+          lastDay = key;
+          const n = dayNets.get(key) || 0;
+          box.append(el('div', 'day-head',
+            `<span>${dayLabel(t.occurred_at)}</span><span class="${n >= 0 ? 'net-pos' : 'net-neg'}">${signed(n)}</span>`));
+        }
       }
       const mine = t.user_id === state.user.id;
       const amt = Number(t.amount);
@@ -371,19 +391,30 @@
       c.addEventListener('click', () => {
         const cur = parseFloat(String($('#f-amount').value).replace(',', '.')) || 0;
         $('#f-amount').value = money(cur + v);
+        autosizeAmount();
         navigator.vibrate?.(8);
       });
       box.append(c);
     }
     const clr = el('button', 'chip chip-clear', '⌫');
     clr.type = 'button';
-    clr.addEventListener('click', () => { $('#f-amount').value = ''; });
+    clr.addEventListener('click', () => { $('#f-amount').value = ''; autosizeAmount(); });
     box.append(clr);
   }
+
+  // The amount input shrink-wraps its value so the number stays optically centred.
+  function autosizeAmount() {
+    const i = $('#f-amount');
+    i.size = Math.max(1, Math.min(9, (i.value || i.placeholder).length));
+  }
+  $('#f-amount').addEventListener('input', autosizeAmount);
 
   function setDir(dir) {
     state.dir = dir;
     $$('[data-dir]').forEach((b) => b.classList.toggle('is-on', b.dataset.dir === dir));
+    $('#form-entry').classList.toggle('dir-in', dir === 'in');
+    $('#form-entry').classList.toggle('dir-out', dir === 'out');
+    $('#f-sign').textContent = dir === 'in' ? '＋' : '−';
     if (catOf(state.cat).dir !== dir) state.cat = CATS[dir][0][0];
     paintCats();
   }
@@ -397,6 +428,7 @@
     if (tx) state.cat = tx.category;
     paintCats();
     paintQuickAmounts();
+    autosizeAmount();
     $('#f-save').textContent = tx ? 'Save changes' : 'Add entry';
     $('#f-delete').hidden = !tx;
     $('#entry-msg').textContent = '';
