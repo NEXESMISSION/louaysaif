@@ -4,10 +4,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>1K Challenge</title>
-<meta name="theme-color" content="#0a0e1a" />
+<meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="1K Race" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="icons/favicon-64.png" />
@@ -16,7 +17,7 @@
 /* One-time hard reset per build: drops any stale service worker and cache so a
    phone that visited an earlier version cannot keep running old JavaScript. */
 (function () {
-  var BUILD = '6';
+  var BUILD = '7';
   try {
     if (localStorage.getItem('app_build') === BUILD) return;
     localStorage.setItem('app_build', BUILD);
@@ -30,7 +31,7 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="css/styles.css?v=6" />
+<link rel="stylesheet" href="css/styles.css?v=7" />
 </head>
 <body>
 
@@ -87,6 +88,7 @@
     <!-- RACE -->
     <section id="view-race" class="view">
       <p class="lead-banner" id="lead-banner">—</p>
+      <div id="tug" class="tug" hidden></div>
       <div id="race" class="race"></div>
       <p class="next-goal" id="next-goal"></p>
 
@@ -115,12 +117,16 @@
     <section id="view-me" class="view" hidden>
       <div class="card me-card">
         <div class="me-head">
-          <span class="me-emoji" id="me-emoji">🔥</span>
+          <span class="av-wrap" id="me-av-wrap">
+            <span id="me-avatar"></span>
+            <button type="button" class="av-edit" id="btn-avatar" aria-label="Change profile photo" title="Change photo">📷</button>
+          </span>
           <div>
             <b id="me-name">—</b>
             <small id="me-email">—</small>
           </div>
         </div>
+        <input type="file" id="avatar-file" accept="image/*" hidden />
         <div class="stats" id="me-stats"></div>
       </div>
 
@@ -177,8 +183,8 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="vendor/supabase.js?v=6"></script>
-<script src="js/config.js?v=6"></script>
-<script src="js/app.js?v=6"></script>
+<script src="vendor/supabase.js?v=7"></script>
+<script src="js/config.js?v=7"></script>
+<script src="js/app.js?v=7"></script>
 </body>
 </html>

@@ -92,7 +92,7 @@
     const join = b.dataset.authTab === 'join';
     $('#form-login').hidden = join;
     $('#form-join').hidden = !join;
-    $('#auth-msg').textContent = '';
+    authMsg('');
   }));
 
   /* Remembers the email address only. The password is left to the browser's
@@ -104,10 +104,15 @@
   const rememberEmail = (v) => { try { localStorage.setItem(EMAIL_KEY, v); } catch {} };
   const lastEmail = () => { try { return localStorage.getItem(EMAIL_KEY) || ''; } catch { return ''; } };
 
+  // Messages arrive as a soft pill rather than bare red text, and a working
+  // message reads as progress instead of as a failure.
   function authMsg(text, ok = false) {
     const m = $('#auth-msg');
-    m.textContent = text;
-    m.classList.toggle('ok', ok);
+    if (!text) { m.hidden = true; m.textContent = ''; return; }
+    const busy = /…$/.test(text);
+    m.hidden = false;
+    m.className = `msg ${busy ? 'msg-busy' : ok ? 'msg-ok' : 'msg-bad'}`;
+    m.innerHTML = `<span class="msg-ico">${busy ? '<span class="dot-spin"></span>' : ok ? '✓' : '!'}</span>${esc(text)}`;
   }
 
   $('#form-login').addEventListener('submit', async (e) => {
@@ -173,6 +178,95 @@
     location.reload();
   });
 
+  /* ───────── avatars ───────── */
+
+  const avatarHTML = (p, size = 'md') => (p?.avatar_url
+    ? `<img class="avatar avatar-${size}" src="${esc(p.avatar_url)}" alt="" loading="lazy" />`
+    : `<span class="avatar av-emoji avatar-${size}">${esc(p?.avatar_emoji || '🔥')}</span>`);
+
+  // Crop to a square and shrink before upload: keeps every photo consistent,
+  // keeps the file small, and means one stored file per player.
+  function squareJpeg(file, size = 400) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const side = Math.min(img.width, img.height);
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+        URL.revokeObjectURL(img.src);
+        c.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not read that image'))), 'image/jpeg', 0.86);
+      };
+      img.onerror = () => reject(new Error('Could not read that image'));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  $('#btn-avatar').addEventListener('click', () => $('#avatar-file').click());
+
+  $('#avatar-file').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return toast('That is not an image');
+    if (file.size > 12 * 1024 * 1024) return toast('That photo is too large');
+
+    const wrap = $('#me-av-wrap');
+    wrap.classList.add('busy');
+    try {
+      const blob = await squareJpeg(file);
+      const path = `${state.user.id}/avatar.jpg`;
+      const up = await sb.storage.from('avatars')
+        .upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+      if (up.error) throw up.error;
+
+      const { data: pub } = sb.storage.from('avatars').getPublicUrl(path);
+      const url = `${pub.publicUrl}?v=${Date.now()}`;   // past the CDN cache
+      const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', state.user.id);
+      if (error) throw error;
+
+      toast('Photo updated');
+      await loadAll();
+    } catch (err) {
+      toast(err.message || 'Upload failed');
+    } finally {
+      wrap.classList.remove('busy');
+    }
+  });
+
+  /* ───────── animation helpers ───────── */
+
+  // Counts a figure up to its value instead of snapping to it.
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  function countTo(node, to, { duration = 820 } = {}) {
+    const from = Number(node.dataset.value || 0);
+    if (from === to) { node.textContent = signed(to); return; }
+    node.dataset.value = to;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      node.textContent = signed(to);
+      return;
+    }
+    const t0 = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / duration);
+      node.textContent = signed(from + (to - from) * easeOut(p));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  const skeleton = (n, cls) =>
+    Array.from({ length: n }, () => `<div class="skel ${cls}"></div>`).join('');
+
+  function showSkeletons() {
+    $('#race').innerHTML = skeleton(2, 'skel-racer');
+    $('#recent').innerHTML = skeleton(3, 'skel-row');
+    $('#history').innerHTML = skeleton(5, 'skel-row');
+    $('#lead-banner').innerHTML = '<span class="skel skel-line"></span>';
+  }
+
   /* ───────── data ───────── */
   async function loadAll() {
     const [p, t, c] = await Promise.all([
@@ -216,6 +310,31 @@
     nx.title = `Goal ${step} of ${total}`;
   }
 
+  const lastNets = {};   // so the counters animate from their previous value
+
+  // Head-to-head bar: who is pulling the rope, at a glance.
+  function renderTug(rows) {
+    const box = $('#tug');
+    if (rows.length < 2) { box.hidden = true; return; }
+    box.hidden = false;
+    const [a, b] = rows;
+    const pa = Math.max(0, a.net), pb = Math.max(0, b.net);
+    const total = pa + pb;
+    const share = total > 0 ? (pa / total) * 100 : 50;
+    box.innerHTML = `
+      <div class="tug-head">
+        <span class="tug-name t1">${esc(a.p.display_name)}</span>
+        <span class="tug-vs">VS</span>
+        <span class="tug-name t2">${esc(b.p.display_name)}</span>
+      </div>
+      <div class="tug-bar">
+        <div class="tug-fill t1" style="width:${share}%"></div>
+        <div class="tug-fill t2" style="width:${100 - share}%"></div>
+        <span class="tug-knob" style="left:${share}%"></span>
+      </div>
+      <div class="tug-meta"><span>${share.toFixed(0)}%</span><span>${(100 - share).toFixed(0)}%</span></div>`;
+  }
+
   function renderRace() {
     const box = $('#race');
     box.textContent = '';
@@ -223,19 +342,22 @@
     const rows = state.profiles.map((p) => ({ p, net: netOf(p.id) }));
     const best = Math.max(...rows.map((r) => r.net), -Infinity);
 
+    renderTug(rows);
+
     rows.forEach(({ p, net }, i) => {
       const cls = i === 0 ? 'p1' : 'p2';
       const pct = Math.max(0, Math.min(100, (net / goal) * 100));
       const won = net >= goal;
       const leads = rows.length > 1 && net === best && net > 0;
       const card = el('div', `racer ${cls}${p.id === state.user.id ? ' is-you' : ''}${won ? ' won' : ''}`);
+      card.style.setProperty('--i', i);
       const count = state.txs.filter((t) => t.user_id === p.id).length;
       const today = state.txs.reduce((s, t) =>
         (t.user_id === p.id && daysBetween(t.occurred_at, new Date()) === 0 ? s + Number(t.amount) : s), 0);
       card.innerHTML = `
         <div class="racer-top">
-          <span class="racer-emoji">${esc(p.avatar_emoji)}</span>
-          <div>
+          ${avatarHTML(p, 'md')}
+          <div class="racer-id">
             <div class="racer-name">${esc(p.display_name)}${won ? '<span class="crown">👑</span>' : leads ? '<span class="crown">🔥</span>' : ''}</div>
             <div class="racer-sub">
               ${count} ${count === 1 ? 'entry' : 'entries'}
@@ -244,16 +366,25 @@
             </div>
           </div>
           <div class="racer-net">
-            <b class="${net >= 0 ? 'net-pos' : 'net-neg'}">${signed(net)}</b>
+            <b class="net-fig ${net >= 0 ? 'net-pos' : 'net-neg'}">${signed(net)}</b>
             <small>${CURRENCY}</small>
           </div>
         </div>
-        <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+        <div class="bar"><div class="bar-fill" style="width:0%"></div></div>
         <div class="bar-meta">
           <span>${pct.toFixed(0)}% of goal</span>
           <span>${won ? 'Goal reached 🎉' : `${money(goal - net)} to go`}</span>
         </div>`;
       box.append(card);
+
+      // let the bar grow in rather than appear already full
+      const fill = card.querySelector('.bar-fill');
+      requestAnimationFrame(() => { fill.style.width = pct + '%'; });
+
+      const fig = card.querySelector('.net-fig');
+      fig.dataset.value = lastNets[p.id] ?? 0;
+      countTo(fig, net);
+      lastNets[p.id] = net;
     });
 
     if (state.profiles.length < 2) {
@@ -275,7 +406,6 @@
       box.append(slot);
     }
 
-    // leader banner
     const banner = $('#lead-banner');
     if (rows.length < 2) {
       banner.innerHTML = 'Race starts when both of you are in.';
@@ -358,7 +488,7 @@
 
   function renderMe() {
     const me = state.profiles.find((p) => p.id === state.user.id);
-    $('#me-emoji').textContent = me?.avatar_emoji || '🔥';
+    $('#me-avatar').innerHTML = avatarHTML(me, 'lg');
     $('#me-name').textContent = me?.display_name || '—';
     $('#me-email').textContent = state.user.email;
 
@@ -385,7 +515,11 @@
   $$('[data-view]').forEach((b) => b.addEventListener('click', () => {
     state.view = b.dataset.view;
     $$('[data-view]').forEach((x) => x.classList.toggle('is-on', x === b));
-    for (const v of ['race', 'history', 'me']) $(`#view-${v}`).hidden = v !== state.view;
+    for (const v of ['race', 'history', 'me']) {
+      const sec = $(`#view-${v}`);
+      sec.hidden = v !== state.view;
+      if (v === state.view) { sec.classList.remove('view-in'); void sec.offsetWidth; sec.classList.add('view-in'); }
+    }
     window.scrollTo({ top: 0 });
   }));
 
@@ -540,6 +674,7 @@
     $('#boot').hidden = true;
     $('#auth').hidden = true;
     $('#app').hidden = false;
+    showSkeletons();          // shimmer placeholders, not a blank screen
     await loadAll();
     subscribe();
 
