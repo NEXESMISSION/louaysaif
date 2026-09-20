@@ -41,6 +41,22 @@
     toastTimer = setTimeout(() => { t.hidden = true; }, 2400);
   }
 
+  /* ───────── challenge setup ─────────
+     Deliberately code-only. Edit these two lines and redeploy — there is no
+     in-app way to move the finish line, so neither player can change it.
+     GOALS is a ladder: clear one and the race rolls straight on to the next. */
+  const GOALS = [1000, 2000, 3000, 5000, 10000];
+  const START_DATE = '2026-09-15';
+  const CURRENCY = 'TND';
+
+  // Active target = the lowest goal the leader has not cleared yet.
+  function ladder() {
+    const best = Math.max(0, ...state.profiles.map((p) => netOf(p.id)));
+    let i = GOALS.findIndex((g) => best < g);
+    if (i === -1) i = GOALS.length - 1;          // every goal cleared
+    return { goal: GOALS[i], next: GOALS[i + 1] ?? null, step: i + 1, total: GOALS.length };
+  }
+
   /* ───────── categories ───────── */
   const CATS = {
     in: [['work', '💼', 'Work'], ['freelance', '🤝', 'Freelance'], ['sale', '🛒', 'Sale'],
@@ -79,6 +95,15 @@
     $('#auth-msg').textContent = '';
   }));
 
+  /* Remembers the email address only. The password is left to the browser's
+     own password manager via the autocomplete hints on the form — storing it
+     ourselves would put it in plain text where any script could read it, and
+     you should not have to reach this screen anyway now that the session
+     persists. */
+  const EMAIL_KEY = 'last_email';
+  const rememberEmail = (v) => { try { localStorage.setItem(EMAIL_KEY, v); } catch {} };
+  const lastEmail = () => { try { return localStorage.getItem(EMAIL_KEY) || ''; } catch { return ''; } };
+
   function authMsg(text, ok = false) {
     const m = $('#auth-msg');
     m.textContent = text;
@@ -96,6 +121,7 @@
     });
     btn.disabled = false;
     if (error) return authMsg(/invalid/i.test(error.message) ? 'Wrong email or password.' : error.message);
+    rememberEmail(String(f.get('email')).trim());
     authMsg('');
     await enterApp(data.session);
   });
@@ -137,6 +163,7 @@
         return authMsg('That email address does not look right.');
       return authMsg(m);
     }
+    rememberEmail(String(f.get('email')).trim());
     authMsg('');
     await enterApp(data.session ?? (await sb.auth.getSession()).data.session);
   });
@@ -151,7 +178,7 @@
     const [p, t, c] = await Promise.all([
       sb.from('profiles').select('*').order('created_at', { ascending: true }),
       sb.from('transactions').select('*').order('occurred_at', { ascending: false }).limit(1000),
-      sb.from('app_config').select('goal,currency,start_date,end_date,invite_code').eq('id', 1).single(),
+      sb.from('app_config').select('invite_code').eq('id', 1).single(),
     ]);
     if (p.data) state.profiles = p.data;
     if (t.data) state.txs = t.data;
@@ -177,21 +204,22 @@
   }
 
   function renderHeader() {
-    const start = state.cfg.start_date ? new Date(state.cfg.start_date + 'T00:00:00') : new Date();
+    const start = new Date(START_DATE + 'T00:00:00');
     const day = daysBetween(start, new Date()) + 1;
     let label = `Day ${Math.max(1, day)}`;
-    if (state.cfg.end_date) {
-      const left = daysBetween(new Date(), new Date(state.cfg.end_date + 'T00:00:00'));
-      label += left >= 0 ? ` · ${left}d left` : ' · over';
-    }
     $('#day-pill').textContent = label;
-    $('#goal-pill').textContent = `Goal ${money(state.cfg.goal)} ${state.cfg.currency}`;
+
+    const { goal, next, step, total } = ladder();
+    $('#goal-pill').textContent = `Goal ${money(goal)} ${CURRENCY}`;
+    const nx = $('#next-goal');
+    nx.textContent = next ? `Next up · ${money(next)} ${CURRENCY}` : 'Final goal';
+    nx.title = `Goal ${step} of ${total}`;
   }
 
   function renderRace() {
     const box = $('#race');
     box.textContent = '';
-    const goal = Number(state.cfg.goal) || 1000;
+    const { goal } = ladder();
     const rows = state.profiles.map((p) => ({ p, net: netOf(p.id) }));
     const best = Math.max(...rows.map((r) => r.net), -Infinity);
 
@@ -217,7 +245,7 @@
           </div>
           <div class="racer-net">
             <b class="${net >= 0 ? 'net-pos' : 'net-neg'}">${signed(net)}</b>
-            <small>${esc(state.cfg.currency)}</small>
+            <small>${CURRENCY}</small>
           </div>
         </div>
         <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
@@ -255,9 +283,9 @@
       const [a, b] = [...rows].sort((x, y) => y.net - x.net);
       const gap = a.net - b.net;
       const winner = rows.find((r) => r.net >= goal);
-      if (winner) banner.innerHTML = `🏆 <b>${esc(winner.p.display_name)}</b> hit ${money(goal)} ${esc(state.cfg.currency)} first!`;
+      if (winner) banner.innerHTML = `🏆 <b>${esc(winner.p.display_name)}</b> hit ${money(goal)} ${CURRENCY} first!`;
       else if (gap === 0) banner.innerHTML = 'Dead heat — nobody is ahead.';
-      else banner.innerHTML = `<b>${esc(a.p.display_name)}</b> leads by <b>${money(gap)} ${esc(state.cfg.currency)}</b>`;
+      else banner.innerHTML = `<b>${esc(a.p.display_name)}</b> leads by <b>${money(gap)} ${CURRENCY}</b>`;
     }
   }
 
@@ -338,7 +366,7 @@
     const sum = (f) => mine.filter(f).reduce((s, t) => s + Number(t.amount), 0);
     const today = mine.filter((t) => daysBetween(t.occurred_at, new Date()) === 0)
       .reduce((s, t) => s + Number(t.amount), 0);
-    const cur = state.cfg.currency;
+    const cur = CURRENCY;
     const stats = [
       ['Your net', signed(sum(() => true)), sum(() => true) >= 0 ? 'net-pos' : 'net-neg'],
       ['Today', signed(today), today >= 0 ? 'net-pos' : 'net-neg'],
@@ -351,9 +379,6 @@
       box.append(el('div', 'stat', `<b class="${cls}">${val}</b><small>${label} (${esc(cur)})</small>`));
     }
 
-    $('#set-goal').value = state.cfg.goal ?? 1000;
-    $('#set-start').value = state.cfg.start_date ?? '';
-    $('#set-end').value = state.cfg.end_date ?? '';
   }
 
   /* ───────── navigation ───────── */
@@ -472,7 +497,7 @@
     btn.disabled = false;
 
     if (error) { $('#entry-msg').textContent = error.message; return; }
-    toast(state.editing ? 'Entry updated' : `${state.dir === 'in' ? '＋' : '－'} ${money(val)} ${state.cfg.currency} logged`);
+    toast(state.editing ? 'Entry updated' : `${state.dir === 'in' ? '＋' : '－'} ${money(val)} ${CURRENCY} logged`);
     closeSheet();
     await loadAll();
   });
@@ -483,21 +508,6 @@
     if (error) { $('#entry-msg').textContent = error.message; return; }
     toast('Entry deleted');
     closeSheet();
-    await loadAll();
-  });
-
-  /* ───────── settings ───────── */
-  $('#btn-save-settings').addEventListener('click', async () => {
-    const msg = $('#settings-msg');
-    const patch = {
-      goal: Number($('#set-goal').value) || 1000,
-      start_date: $('#set-start').value || null,
-      end_date: $('#set-end').value || null,
-    };
-    if (!patch.start_date) { msg.textContent = 'Pick a start date.'; msg.classList.remove('ok'); return; }
-    const { error } = await sb.from('app_config').update(patch).eq('id', 1);
-    if (error) { msg.textContent = error.message; msg.classList.remove('ok'); return; }
-    msg.textContent = 'Saved.'; msg.classList.add('ok');
     await loadAll();
   });
 
@@ -546,6 +556,14 @@
     $('#boot').hidden = true;
     $('#app').hidden = true;
     $('#auth').hidden = false;
+
+    // Bring back the address used last time, and put the cursor on the
+    // password so the browser's saved password drops straight in.
+    const saved = lastEmail();
+    if (saved) {
+      $('#form-login').email.value = saved;
+      setTimeout(() => $('#form-login').password.focus(), 60);
+    }
 
     // The invite code fills itself in: from a ?code=... share link, or from the
     // build-time INVITE_CODE. When we have one, the field is hidden entirely so
