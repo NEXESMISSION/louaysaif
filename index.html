@@ -12,7 +12,25 @@
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="icons/favicon-64.png" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-<link rel="stylesheet" href="css/styles.css" />
+<script>
+/* One-time hard reset per build: drops any stale service worker and cache so a
+   phone that visited an earlier version cannot keep running old JavaScript. */
+(function () {
+  var BUILD = '3';
+  try {
+    if (localStorage.getItem('app_build') === BUILD) return;
+    localStorage.setItem('app_build', BUILD);
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.getRegistrations()
+      .then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })
+      .then(function () { return caches.keys(); })
+      .then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })
+      .then(function () { location.reload(); })
+      .catch(function () {});
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="css/styles.css?v=3" />
 </head>
 <body>
 
@@ -169,8 +187,8 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="vendor/supabase.js"></script>
-<script src="js/config.js"></script>
-<script src="js/app.js"></script>
+<script src="vendor/supabase.js?v=3"></script>
+<script src="js/config.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>

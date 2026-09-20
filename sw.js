@@ -1,5 +1,5 @@
 /* 1K Challenge service worker — app shell cache, network-first for data. */
-const VERSION = 'v1';
+const VERSION = 'v3';
 const SHELL = `shell-${VERSION}`;
 
 const ASSETS = [

@@ -7,3 +7,4 @@ node_modules/
 Thumbs.db
 secrets.txt
 .claude/
+js/config.js

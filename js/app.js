@@ -543,13 +543,15 @@
     $('#app').hidden = true;
     $('#auth').hidden = false;
 
-    // A share link like ...?code=ABCDE-FGHIJ opens straight on Join with the
-    // code already filled, so nobody has to retype it on a phone keyboard.
-    const code = new URLSearchParams(location.search).get('code');
+    // The invite code fills itself in: from a ?code=... share link, or from the
+    // build-time INVITE_CODE. When we have one, the field is hidden entirely so
+    // there is nothing to mistype. The database still enforces it either way.
+    const fromLink = new URLSearchParams(location.search).get('code');
+    const code = (fromLink || window.APP_CONFIG.INVITE_CODE || '').trim();
     if (code) {
-      $('[data-auth-tab="join"]').click();
-      $('#join-code').value = code.trim();
-      $('#form-join').display_name.focus();
+      $('#join-code').value = code;
+      $('#join-code').closest('label').hidden = true;
+      if (fromLink) $('[data-auth-tab="join"]').click();
     }
   }
 
