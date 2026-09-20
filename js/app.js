@@ -90,14 +90,14 @@
     const btn = e.target.querySelector('button');
     const f = new FormData(e.target);
     btn.disabled = true; authMsg('Checking…');
-    const { error } = await sb.auth.signInWithPassword({
+    const { data, error } = await sb.auth.signInWithPassword({
       email: String(f.get('email')).trim(),
       password: String(f.get('password')),
     });
     btn.disabled = false;
     if (error) return authMsg(/invalid/i.test(error.message) ? 'Wrong email or password.' : error.message);
     authMsg('');
-    await enterApp();
+    await enterApp(data.session);
   });
 
   $('#form-join').addEventListener('submit', async (e) => {
@@ -113,7 +113,7 @@
     if (gate.slots_left <= 0) { btn.disabled = false; return authMsg('Both spots are already taken.'); }
 
     authMsg('Creating your side…');
-    const { error } = await sb.auth.signUp({
+    const { data, error } = await sb.auth.signUp({
       email: String(f.get('email')).trim(),
       password: String(f.get('password')),
       options: {
@@ -138,7 +138,7 @@
       return authMsg(m);
     }
     authMsg('');
-    await enterApp();
+    await enterApp(data.session ?? (await sb.auth.getSession()).data.session);
   });
 
   $('#btn-logout').addEventListener('click', async () => {
@@ -521,10 +521,12 @@
   }
 
   /* ───────── boot ───────── */
-  async function enterApp() {
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) return showAuth();
-    state.user = user;
+  // Takes the user straight from the stored session. Never calls getUser(),
+  // which is a network round-trip — on a weak connection that returns nothing
+  // and would bounce a perfectly valid session back to the login screen.
+  async function enterApp(session) {
+    if (!session?.user) return showAuth();
+    state.user = session.user;
     $('#boot').hidden = true;
     $('#auth').hidden = true;
     $('#app').hidden = false;
@@ -539,6 +541,8 @@
   }
 
   function showAuth() {
+    state.user = null;
+    $('#boot-msg').textContent = '';
     $('#boot').hidden = true;
     $('#app').hidden = true;
     $('#auth').hidden = false;
@@ -555,14 +559,82 @@
     }
   }
 
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && state.user) loadAll();
+  /* ───────── staying logged in ─────────
+     The only thing that should ever return you to the login screen is signing
+     out on purpose, or a refresh token the server actively rejects. Being
+     offline, on bad signal, or reopening after weeks must not. */
+
+  // supabase-js may store the session under one key or split it across
+  // "<key>.0", "<key>.1", so match on the prefix rather than an exact key.
+  const TOKEN_KEY = `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
+  const hasStoredSession = () => {
+    try {
+      return Object.keys(localStorage).some((k) => k.startsWith(TOKEN_KEY));
+    } catch { return false; }
+  };
+
+  // Ask the browser to keep our storage; without this iOS can evict
+  // script-written storage after a stretch of not opening the app.
+  navigator.storage?.persist?.().catch(() => {});
+
+  function bootMsg(text) { $('#boot-msg').textContent = text || ''; }
+
+  function waitingForNetwork() {
+    $('#boot').hidden = false;
+    $('#auth').hidden = true;
+    $('#app').hidden = true;
+    bootMsg('Reconnecting… you are still signed in.');
+  }
+
+  // Resolve the session without ever giving up because of the network.
+  async function resolveSession({ retries = 4 } = {}) {
+    for (let i = 0; i < retries; i++) {
+      const { data: { session } } = await sb.auth.getSession().catch(() => ({ data: {} }));
+      if (session) return session;
+
+      // No usable session. If nothing was ever stored, they are simply logged out.
+      if (!hasStoredSession()) return null;
+
+      // Something IS stored, so this is a refresh that has not landed yet.
+      const { data, error } = await sb.auth.refreshSession().catch((e) => ({ error: e }));
+      if (data?.session) return data.session;
+
+      // A server that explicitly rejects the token means really signed out.
+      const status = error?.status;
+      if (status === 400 || status === 401 || status === 403) return null;
+
+      waitingForNetwork();
+      await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
+    return 'offline';
+  }
+
+  async function restore() {
+    const session = await resolveSession();
+    if (session === 'offline') {
+      waitingForNetwork();
+      return;
+    }
+    if (session) await enterApp(session);
+    else showAuth();
+  }
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') { showAuth(); return; }
+    if (session?.user) state.user = session.user;   // TOKEN_REFRESHED, SIGNED_IN
   });
 
-  (async () => {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) await enterApp(); else showAuth();
-  })();
+  // Coming back to the app: refresh data, and recover the session if it lapsed.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (state.user) loadAll();
+    else if (hasStoredSession()) restore();
+  });
+  window.addEventListener('online', () => {
+    if (state.user) loadAll(); else if (hasStoredSession()) restore();
+  });
+
+  restore();
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));

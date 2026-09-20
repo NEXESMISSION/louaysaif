@@ -32,7 +32,8 @@ small{color:var(--muted)}
 [hidden]{display:none!important}
 
 /* ───────── boot ───────── */
-.boot{position:fixed;inset:0;display:grid;place-items:center;z-index:60}
+.boot{position:fixed;inset:0;display:grid;place-items:center;align-content:center;gap:14px;z-index:60;padding:24px}
+.boot-msg{margin:0;font-size:13px;color:var(--muted);text-align:center;max-width:260px}
 .spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--line-2);border-top-color:var(--gold);animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 

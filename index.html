@@ -16,7 +16,7 @@
 /* One-time hard reset per build: drops any stale service worker and cache so a
    phone that visited an earlier version cannot keep running old JavaScript. */
 (function () {
-  var BUILD = '4';
+  var BUILD = '5';
   try {
     if (localStorage.getItem('app_build') === BUILD) return;
     localStorage.setItem('app_build', BUILD);
@@ -30,12 +30,12 @@
   } catch (e) {}
 })();
 </script>
-<link rel="stylesheet" href="css/styles.css?v=4" />
+<link rel="stylesheet" href="css/styles.css?v=5" />
 </head>
 <body>
 
 <!-- ───────────────────────── boot ───────────────────────── -->
-<div id="boot" class="boot"><div class="spinner"></div></div>
+<div id="boot" class="boot"><div class="spinner"></div><p id="boot-msg" class="boot-msg"></p></div>
 
 <!-- ───────────────────────── auth ───────────────────────── -->
 <div id="auth" class="auth" hidden>
@@ -187,8 +187,8 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="vendor/supabase.js?v=4"></script>
-<script src="js/config.js?v=4"></script>
-<script src="js/app.js?v=4"></script>
+<script src="vendor/supabase.js?v=5"></script>
+<script src="js/config.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>
