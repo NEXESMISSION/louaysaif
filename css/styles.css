@@ -12,6 +12,8 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* kills double-tap-to-zoom everywhere; pinch-to-zoom still works */
+html,body{touch-action:manipulation}
 html,body{margin:0;height:100%}
 body{
   background:
@@ -24,7 +26,8 @@ body{
 }
 h1,h2,h3{margin:0;font-weight:750;letter-spacing:-.02em}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
-input{font:inherit}
+/* iOS zooms the page when a focused field is under 16px — never go below it */
+input,select,textarea{font-family:inherit;font-size:16px}
 small{color:var(--muted)}
 [hidden]{display:none!important}
 
