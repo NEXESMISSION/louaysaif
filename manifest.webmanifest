@@ -1,0 +1,21 @@
+{
+  "name": "1K Challenge — Saif vs Louay",
+  "short_name": "1K Race",
+  "description": "Race to 1000 TND net. Log every dinar in and out, see who gets there first.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0e1a",
+  "theme_color": "#0a0e1a",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Add money in", "url": "./?add=in", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Add spending", "url": "./?add=out", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

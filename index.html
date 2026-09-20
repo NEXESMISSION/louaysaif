@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>1K Challenge</title>
+<meta name="theme-color" content="#0a0e1a" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="1K Race" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/favicon-64.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ───────────────────────── boot ───────────────────────── -->
+<div id="boot" class="boot"><div class="spinner"></div></div>
+
+<!-- ───────────────────────── auth ───────────────────────── -->
+<div id="auth" class="auth" hidden>
+  <div class="auth-card">
+    <div class="brand">
+      <img src="icons/icon-192.png" alt="" width="64" height="64" />
+      <h1>1000 <span>TND</span> Challenge</h1>
+      <p class="brand-sub">First to <b>+1000 net</b> wins. Log every dinar.</p>
+    </div>
+
+    <div class="seg auth-seg">
+      <button class="seg-btn is-on" data-auth-tab="login">Log in</button>
+      <button class="seg-btn" data-auth-tab="join">Join</button>
+    </div>
+
+    <form id="form-login" class="form">
+      <label>Email<input type="email" name="email" autocomplete="username" required placeholder="you@mail.com" /></label>
+      <label>Password<input type="password" name="password" autocomplete="current-password" required minlength="6" placeholder="••••••" /></label>
+      <button class="btn btn-primary" type="submit">Enter the race</button>
+    </form>
+
+    <form id="form-join" class="form" hidden>
+      <div class="row-2">
+        <label>Your name<input name="display_name" required maxlength="20" placeholder="Saif" /></label>
+        <label>Emoji<input name="avatar_emoji" maxlength="4" placeholder="🔥" value="🔥" /></label>
+      </div>
+      <label>Email<input type="email" name="email" autocomplete="username" required placeholder="you@mail.com" /></label>
+      <label>Password<input type="password" name="password" autocomplete="new-password" required minlength="6" placeholder="at least 6 characters" /></label>
+      <label>Invite code<input name="invite_code" required placeholder="shared between you two" autocapitalize="characters" /></label>
+      <button class="btn btn-primary" type="submit">Create my side</button>
+    </form>
+
+    <p id="auth-msg" class="msg" role="alert"></p>
+  </div>
+</div>
+
+<!-- ───────────────────────── app ───────────────────────── -->
+<div id="app" class="app" hidden>
+
+  <header class="topbar">
+    <div class="topbar-l">
+      <span class="day-pill" id="day-pill">Day 1</span>
+      <span class="goal-pill" id="goal-pill">Goal 1000 TND</span>
+    </div>
+    <button class="icon-btn" id="btn-refresh" title="Refresh" aria-label="Refresh">⟳</button>
+  </header>
+
+  <main>
+    <!-- RACE -->
+    <section id="view-race" class="view">
+      <p class="lead-banner" id="lead-banner">—</p>
+      <div id="race" class="race"></div>
+
+      <div class="quick">
+        <button class="quick-btn quick-in"  data-quick="in">＋ Money in</button>
+        <button class="quick-btn quick-out" data-quick="out">－ I spent</button>
+      </div>
+
+      <h2 class="sec-title">Latest moves</h2>
+      <div id="recent" class="list"></div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="view-history" class="view" hidden>
+      <div class="chips" id="filters">
+        <button class="chip is-on" data-filter="all">Everything</button>
+        <button class="chip" data-filter="mine">Only me</button>
+        <button class="chip" data-filter="them">Only them</button>
+        <button class="chip" data-filter="in">＋ In</button>
+        <button class="chip" data-filter="out">－ Out</button>
+      </div>
+      <div id="history" class="list"></div>
+    </section>
+
+    <!-- ME -->
+    <section id="view-me" class="view" hidden>
+      <div class="card me-card">
+        <div class="me-head">
+          <span class="me-emoji" id="me-emoji">🔥</span>
+          <div>
+            <b id="me-name">—</b>
+            <small id="me-email">—</small>
+          </div>
+        </div>
+        <div class="stats" id="me-stats"></div>
+      </div>
+
+      <div class="card">
+        <h3>Challenge settings</h3>
+        <div class="row-2">
+          <label>Goal (TND)<input id="set-goal" type="number" inputmode="decimal" step="1" /></label>
+          <label>Started on<input id="set-start" type="date" /></label>
+        </div>
+        <label><span class="lbl-row">Deadline <small class="hint">(optional)</small></span><input id="set-end" type="date" /></label>
+        <button class="btn" id="btn-save-settings">Save settings</button>
+        <p class="msg" id="settings-msg"></p>
+      </div>
+
+      <div class="card">
+        <h3>Install the app</h3>
+        <p class="hint" id="install-hint">Add it to your home screen so it opens like a normal app, works offline and keeps you logged in.</p>
+        <button class="btn" id="btn-install" hidden>Add to home screen</button>
+      </div>
+
+      <button class="btn btn-ghost" id="btn-logout">Log out</button>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab is-on" data-view="race"><span>🏁</span>Race</button>
+    <button class="tab tab-fab" id="fab" aria-label="Add entry">＋</button>
+    <button class="tab" data-view="history"><span>📜</span>History</button>
+    <button class="tab" data-view="me"><span>👤</span>Me</button>
+  </nav>
+</div>
+
+<!-- ───────────────────────── entry sheet ───────────────────────── -->
+<div id="sheet" class="sheet-wrap" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <form id="form-entry" class="sheet">
+    <div class="sheet-grab"></div>
+    <div class="seg dir-seg">
+      <button type="button" class="seg-btn is-on" data-dir="in">＋ Money in</button>
+      <button type="button" class="seg-btn" data-dir="out">－ Spent</button>
+    </div>
+
+    <div class="amount-box">
+      <input id="f-amount" type="text" inputmode="decimal" placeholder="0" autocomplete="off" />
+      <span class="cur">TND</span>
+    </div>
+
+    <div class="chips" id="quick-amounts"></div>
+    <div class="chips" id="cat-chips"></div>
+
+    <label>Note<input id="f-note" maxlength="60" placeholder="what was it?" /></label>
+    <label>When<input id="f-when" type="datetime-local" /></label>
+
+    <div class="sheet-actions">
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary" id="f-save">Save</button>
+    </div>
+    <button type="button" class="btn btn-danger" id="f-delete" hidden>Delete this entry</button>
+    <p class="msg" id="entry-msg"></p>
+  </form>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="vendor/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
